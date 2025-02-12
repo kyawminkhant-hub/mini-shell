@@ -8,7 +8,7 @@
 *
 *	brief	: mini-shell (msh)
 *
-* 	ref	: based on Stephen Brennan's LSH
+*	ref	: based on Stephen Brennan's LSH
 *
 *************************************************************************************/
 
@@ -18,11 +18,17 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#define MSH_RL_BUFSIZE 1024
-#define MSH_TOK_BUFSIZE 64
-#define MSH_TOK_DELIM " \t\r\n\a"
-#define MSH_EXS_BUFSIZE 4		// between 0-255 (3 digits + null byte)
-#define MSH_PID_BUFSIZE 8		// maximum 4 million (7 digits + null byte) 
+#define MSH_RL_BUFSIZE 1024       
+#define MSH_TOK_BUFSIZE 64        
+#define MSH_TOK_DELIM " \t\r\n\a" 
+#define MSH_EXS_BUFSIZE 4		      
+#define MSH_PID_BUFSIZE 8		     
+
+/*
+ * Process Info
+ */
+int exit_status = 0; 
+pid_t msh_pid;
 
 /* 
  * Function Declarations for builtin shell commands
@@ -32,39 +38,36 @@ int msh_help(char **args);
 int msh_exit(char **args);
 
 /* 
- * Function Declarations for special variables
+ * Function Declarations for special variables substitutions 
  */
-char *swap_exit_status(void);
-char *swap_msh_pid(void);
+char *sub_exit_status(void);
+char *sub_msh_pid(void);
 
 /* 
  * Special variables list 
  */
-int exit_status = 0; 
-pid_t msh_pid;
-
-char *svar_str[] = {
+char *keywords[] = {
   "$?",
   "$$"
 };
 
-char* (*svar_swap[]) (void) = {
-  &swap_exit_status,
-  &swap_msh_pid
-};
-
-int msh_num_svars() {
-  return sizeof(svar_str) / sizeof(char *); 
+int msh_num_keywords() {
+  return sizeof(keywords) / sizeof(char *); 
 }
 
 /*
- * Special variables function implementations
+ * Special variables substitutions 
  */
+char* (*msh_sub[]) (void) = {
+  &sub_exit_status,
+  &sub_msh_pid
+};
 
 /*
- * Special variable: $? -> exit status of last command
+ * Substitute "$?" -> exit status of last command
+ * return: string value of exist_status
  */
-char *swap_exit_status() {
+char *sub_exit_status() {
   int bufsize = MSH_EXS_BUFSIZE;
   char *exit_status_str = malloc(bufsize * sizeof(char));
   
@@ -76,9 +79,10 @@ char *swap_exit_status() {
 }
 
 /*
- * Special variable: $$ -> shell process ID
+ * Substitue "$$" -> shell process ID
+ * return: string value of msh_pid
  */
-char *swap_msh_pid() {
+char *sub_msh_pid() {
   int bufsize = MSH_PID_BUFSIZE;
   char *msh_pid_str = malloc(bufsize * sizeof(char));
 
@@ -165,8 +169,8 @@ int msh_help(char **args)
   }
 
   printf("Special variables: \n");
-  for (i = 0; i < msh_num_svars(); i++) {
-    printf("  %s\n", svar_str[i]);
+  for (i = 0; i < msh_num_keywords(); i++) {
+    printf("  %s\n", keywords[i]);
   }
 
   printf("Use the \'man\' command for information on external commands.\n");
@@ -218,6 +222,7 @@ char **msh_split_line(char *line)
   char **tokens = malloc(bufsize * sizeof(char*));
   char *token;
   int i;
+  int flag = 0;
 
   if (!tokens) {
     fprintf(stderr, "msh: allocation error\n");
@@ -227,27 +232,25 @@ char **msh_split_line(char *line)
   token = strtok(line, MSH_TOK_DELIM);
   while (token != NULL) {
     /* 
-     * if a spacial variable found in token, swap the current token with its value. 
+     * if a spacial variable keyword is found in token, substitute the current token. 
      */
-    for (i=0; i<msh_num_svars(); i++) {
-      if (strcmp(token, svar_str[i]) == 0) {
-        token = (*svar_swap[i])();
+    for (i=0; i<msh_num_keywords(); i++) {
+      if (strcmp(token, keywords[i]) == 0) {
+        token = (*msh_sub[i])();
       }
-    }
-
-    // *(tokens+position) = token;
-    tokens[position] = token; 
+    } 
+    tokens[position] = token;  
     position++;
-
+    
     if (position >= bufsize) {
       bufsize += MSH_TOK_BUFSIZE;
       tokens = realloc(tokens, bufsize * sizeof(char*));
       if (!tokens) {
         fprintf(stderr, "msh: allocation error\n");
-	exit(EXIT_FAILURE);
+	      exit(EXIT_FAILURE);
       }
     }
-
+    
     token = strtok(NULL, MSH_TOK_DELIM);
   }
 
@@ -279,13 +282,14 @@ int msh_launch(char **args)
   }
   else {
     // Parent process
+    
+    /* 
+     * Wait until a child process terminated normally and terminated signal was caught.
+     * pid argument: specifies a set of child processes.
+     * status: exit status of child process.
+     * WUNTRACED: the status of any child processes specified by pid that are stopped.
+     */
     do {
-      /* 
-       * Wait until a child process terminated normally and terminated signal was caught.
-       * pid argument: specifies a set of child processes.
-       * status: exit status of child process.
-       * WUNTRACED: the status of any child processes specified by pid that are stopped.
-       */
       wpid = waitpid(pid, &status, WUNTRACED);
     } while (!WIFEXITED(status) && !WIFSIGNALED(status)); 
 
@@ -352,11 +356,11 @@ void msh_loop(void)
 {
    char *line;
    char **args;
-   int status; 
-   int i;
+   int status;
 
    do {	   
      printf("\n");
+     
      msh_prompt(); 
      line = msh_read_line();
      args = msh_split_line(line);
@@ -364,10 +368,6 @@ void msh_loop(void)
 
      free(line);
      free(args);
-     
-     for (i=0; i<msh_num_svars(); i++) {
-        free((*svar_swap[i])());
-     }
    } while (status);
    /* if status is 1 (true), shell should continue running. */
 }
@@ -384,8 +384,8 @@ int main (int argc, char **argv)
           "| '_ ` _ \\| | '_ \\| |  _____  / __| '_ \\ / _ \\ | | \n"
           "| | | | | | | | | | | |_____| \\__ \\ | | |  __/ | |   \n"
           "|_| |_| |_|_|_| |_|_|         |___/_| |_|\\___|_|_|    \n"
-	  "                                                       \n"
-	 ); 
+	        "                                                       \n"
+	       ); 
    printf("mini-shell 1.0 on linux.\n");
    printf("Type \"help\" for information.\n");
 
