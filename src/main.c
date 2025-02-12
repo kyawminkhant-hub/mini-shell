@@ -67,7 +67,8 @@ char* (*msh_sub[]) (void) = {
  * Substitute "$?" -> exit status of last command
  * return: string value of exist_status
  */
-char *sub_exit_status() {
+char *sub_exit_status() 
+{
   int bufsize = MSH_EXS_BUFSIZE;
   char *exit_status_str = malloc(bufsize * sizeof(char));
   
@@ -82,7 +83,8 @@ char *sub_exit_status() {
  * Substitue "$$" -> shell process ID
  * return: string value of msh_pid
  */
-char *sub_msh_pid() {
+char *sub_msh_pid() 
+{
   int bufsize = MSH_PID_BUFSIZE;
   char *msh_pid_str = malloc(bufsize * sizeof(char));
 
@@ -323,6 +325,19 @@ int msh_execute(char **args)
 }
 
 /*
+ * Release memory allocated after each command execution
+ */
+void clean_up(char **args) 
+{
+  int i;
+
+  for (i = 0; args[i] != NULL; i++) {
+    free(args[i]);
+  }
+  free(args);
+}
+
+/*
  * Shell Prompt 
  */
 void msh_prompt(void) 
@@ -366,8 +381,7 @@ void msh_loop(void)
      args = msh_split_line(line);
      status = msh_execute(args);
 
-     free(line);
-     free(args);
+     clean_up(args);
    } while (status);
    /* if status is 1 (true), shell should continue running. */
 }
@@ -384,8 +398,8 @@ int main (int argc, char **argv)
           "| '_ ` _ \\| | '_ \\| |  _____  / __| '_ \\ / _ \\ | | \n"
           "| | | | | | | | | | | |_____| \\__ \\ | | |  __/ | |   \n"
           "|_| |_| |_|_|_| |_|_|         |___/_| |_|\\___|_|_|    \n"
-	        "                                                       \n"
-	       ); 
+	  "                                                       \n"
+	 ); 
    printf("mini-shell 1.0 on linux.\n");
    printf("Type \"help\" for information.\n");
 
