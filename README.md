@@ -3,6 +3,8 @@
 
 Mini-shell is a basic shell implementation in C based on [Stephen Brennan's LSH][i]. This project is built to understand the inner workings of a shell, improve pointer manipulation skills, and explore system calls in depth. It includes basic shell functions: **a shell prompt**, **special variables**, **parsing arguments**, **executing built-in commands** and **external commands** while it's still missing many features including multi-line commands, quoting arguments, signal handling, job control, piping and so on.
 
+![Mini-Shell](./screenshots/ss1.png)
+
 ## Run on Linux
 
 * Compile `gcc main.c -o msh`
